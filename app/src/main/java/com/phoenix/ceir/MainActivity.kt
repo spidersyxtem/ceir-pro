@@ -11,17 +11,17 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
-    // Variable တွေကို Class level မှာ ကြေညာထားမှ Function အားလုံးက လှမ်းသုံးလို့ရမှာပါ
-    private lateinit var webView: WebView
-    private lateinit var resultLayout: LinearLayout
-    private lateinit var txtInfo: TextView
-    private lateinit var txtStatus: TextView
+    // Variable တွေကို class level မှာ ကြေညာခြင်း
+    private var webView: WebView? = null
+    private var resultLayout: LinearLayout? = null
+    private var txtInfo: TextView? = null
+    private var txtStatus: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // View တွေကို ID နဲ့ ချိတ်ဆက်ခြင်း
+        // View တွေကို သေချာစွာ ချိတ်ဆက်ခြင်း
         webView = findViewById(R.id.webView)
         resultLayout = findViewById(R.id.resultLayout)
         txtInfo = findViewById(R.id.txtInfo)
@@ -31,21 +31,20 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
 
         btnBack.setOnClickListener {
-            resultLayout.visibility = View.GONE
-            webView.visibility = View.VISIBLE
-            webView.reload()
+            resultLayout?.visibility = View.GONE
+            webView?.visibility = View.VISIBLE
+            webView?.reload()
         }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.addJavascriptInterface(this, "AndroidBridge")
+        webView?.settings?.javaScriptEnabled = true
+        webView?.settings?.domStorageEnabled = true
+        webView?.addJavascriptInterface(this, "AndroidBridge")
         
-        webView.webViewClient = object : WebViewClient() {
+        webView?.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                // Website ထဲက data နှိုက်မယ့် script
                 val script = """
                     var check = setInterval(function() {
                         var table = document.querySelector('table');
@@ -58,38 +57,36 @@ class MainActivity : AppCompatActivity() {
                         }
                     }, 1000);
                 """.trimIndent()
-                webView.evaluateJavascript(script, null)
+                webView?.evaluateJavascript(script, null)
             }
         }
-        webView.loadUrl("https://ceir.gov.mm/check-status")
+        webView?.loadUrl("https://ceir.gov.mm/check-status")
     }
 
     @JavascriptInterface
     fun onResult(brand: String, model: String, date: String) {
         runOnUiThread {
-            webView.visibility = View.GONE
-            resultLayout.visibility = View.VISIBLE
+            webView?.visibility = View.GONE
+            resultLayout?.visibility = View.VISIBLE
             
-            // UI Update လုပ်ခြင်း
-            txtInfo.text = "Device: $brand $model"
+            txtInfo?.text = "Device: $brand $model"
             
-            // April 2024 Logic
             if (date.contains("2024") && !date.contains("Jan") && !date.contains("Feb") && !date.contains("Mar")) {
-                txtStatus.text = "AFTER APRIL 2024 (TAX REQUIRED)"
-                txtStatus.setTextColor(Color.RED)
+                txtStatus?.text = "AFTER APRIL 2024 (TAX REQUIRED)"
+                txtStatus?.setTextColor(Color.RED)
             } else {
-                txtStatus.text = "BEFORE APRIL 2024 (CLEAN)"
-                txtStatus.setTextColor(Color.GREEN)
+                txtStatus?.text = "BEFORE APRIL 2024 (CLEAN)"
+                txtStatus?.setTextColor(Color.GREEN)
             }
         }
     }
 
     override fun onBackPressed() {
-        if (resultLayout.visibility == View.VISIBLE) {
-            resultLayout.visibility = View.GONE
-            webView.visibility = View.VISIBLE
-        } else if (webView.canGoBack()) {
-            webView.goBack()
+        if (resultLayout?.visibility == View.VISIBLE) {
+            resultLayout?.visibility = View.GONE
+            webView?.visibility = View.VISIBLE
+        } else if (webView?.canGoBack() == true) {
+            webView?.goBack()
         } else {
             super.onBackPressed()
         }
