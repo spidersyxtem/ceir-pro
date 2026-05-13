@@ -29,35 +29,42 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
 
         btnBack.setOnClickListener {
-            resultLayout?.visibility = View.GONE
-            webView?.visibility = View.VISIBLE
-            webView?.reload()
+            showWebsite()
         }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
-        webView?.settings?.javaScriptEnabled = true
-        webView?.settings?.domStorageEnabled = true
-        webView?.settings?.databaseEnabled = true
+        val webSettings = webView?.settings
+        webSettings?.javaScriptEnabled = true
+        webSettings?.domStorageEnabled = true
+        webSettings?.databaseEnabled = true
+        webSettings?.userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        
         webView?.addJavascriptInterface(this, "AndroidBridge")
         
         webView?.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                // MutationObserver ကိုသုံးပြီး Result ပေါ်လာတာနဲ့ ချက်ချင်းဖမ်းပါမယ်
+                // UI အသစ်က 'Finished' button သို့မဟုတ် 'Tax Payment Status' ဆိုတဲ့ စာသားပေါ်လာတာနဲ့ data နှိုက်ပါမယ်
                 val script = """
                     (function() {
-                        var observer = new MutationObserver(function(mutations) {
-                            var table = document.querySelector('table');
-                            if (table && table.innerText.includes('Brand')) {
-                                var b = table.rows[0].cells[1].innerText;
-                                var m = table.rows[1].cells[1].innerText;
-                                var d = table.rows[2].cells[1].innerText;
-                                AndroidBridge.onResult(b, m, d);
-                                observer.disconnect();
+                        var checkResult = setInterval(function() {
+                            // UI အသစ်တွင် စာသားများကို ရှာဖွေခြင်း
+                            var bodyText = document.body.innerText;
+                            if (bodyText.includes('Tax Payment Status') || bodyText.includes('Finished')) {
+                                
+                                // IMEI status, Tax status စတာတွေကို စုစည်းခြင်း
+                                var imei = "Checked";
+                                var taxStatus = bodyText.includes('Paid') ? "Paid" : "Unpaid";
+                                var blockStatus = bodyText.includes('Allowed') ? "Allowed" : "Blocked";
+                                
+                                // အခု UI အသစ်မှာ Brand/Date တိုက်ရိုက်မပါရင် IMEI နံပါတ်ကိုပဲ အချက်အလက်အဖြစ် ပို့ပေးပါမယ်
+                                var imeiDisplay = document.querySelector('.text-2xl') ? document.querySelector('.text-2xl').innerText : "Device Info";
+
+                                AndroidBridge.onResult(imeiDisplay, taxStatus, blockStatus);
+                                clearInterval(checkResult);
                             }
-                        });
-                        observer.observe(document.body, { childList: true, subtree: true });
+                        }, 1000);
                     })();
                 """.trimIndent()
                 webView?.evaluateJavascript(script, null)
@@ -67,25 +74,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     @JavascriptInterface
-    fun onResult(brand: String, model: String, date: String) {
+    fun onResult(displayInfo: String, tax: String, block: String) {
         runOnUiThread {
-            if (brand.isNotEmpty()) {
-                webView?.visibility = View.GONE
-                resultLayout?.visibility = View.VISIBLE
-                
-                txtBrandInfo?.text = "Device: ${brand.trim()} ${model.trim()}"
-                
-                // April 2024 Check
-                if (date.contains("2024") && !date.contains("Jan") && !date.contains("Feb") && !date.contains("Mar")) {
-                    txtAprilStatus?.text = "AFTER APRIL 2024\n(TAX REQUIRED)"
-                    txtAprilStatus?.setBackgroundColor(Color.RED)
-                    txtAprilStatus?.setTextColor(Color.WHITE)
-                } else {
-                    txtAprilStatus?.text = "BEFORE APRIL 2024\n(CLEAN DEVICE)"
-                    txtAprilStatus?.setBackgroundColor(Color.parseColor("#10B981"))
-                    txtAprilStatus?.setTextColor(Color.WHITE)
-                }
+            webView?.visibility = View.GONE
+            resultLayout?.visibility = View.VISIBLE
+            
+            txtBrandInfo?.text = "IMEI: $displayInfo\nTAX: $tax\nSTATUS: $block"
+            
+            // Tax Paid ဖြစ်ရင် အစိမ်းရောင်၊ Unpaid ဆိုရင် အနီရောင် ပြပါမယ်
+            if (tax.contains("Paid", ignoreCase = true)) {
+                txtAprilStatus?.text = "VERIFIED: TAX PAID ✅"
+                txtAprilStatus?.setBackgroundColor(Color.parseColor("#10B981")) // Green
+            } else {
+                txtAprilStatus?.text = "ALERT: TAX UNPAID ⚠️"
+                txtAprilStatus?.setBackgroundColor(Color.parseColor("#E11D48")) // Red
             }
+            txtAprilStatus?.setTextColor(Color.WHITE)
+        }
+    }
+
+    private fun showWebsite() {
+        resultLayout?.visibility = View.GONE
+        webView?.visibility = View.VISIBLE
+        webView?.reload()
+    }
+
+    override fun onBackPressed() {
+        if (resultLayout?.visibility == View.VISIBLE) {
+            showWebsite()
+        } else if (webView?.canGoBack() == true) {
+            webView?.goBack()
+        } else {
+            super.onBackPressed()
         }
     }
 }
