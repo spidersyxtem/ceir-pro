@@ -8,7 +8,9 @@
         android:allowBackup="true"
         android:label="Phoenix Tugyi"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:icon="@android:mipmap/sym_def_app_icon"
+        android:roundIcon="@android:mipmap/sym_def_app_icon">
         
         <activity
             android:name=".MainActivity"
