@@ -5,12 +5,16 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
 dependencyResolutionManagement {
+    // repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS) က 
+    // build.gradle ထဲမှာ repository ထပ်ထည့်ရင် အမှားပြခိုင်းတာဖြစ်ပါတယ်
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
     }
 }
+
 rootProject.name = "PhoenixTugyi"
 include ':app'
