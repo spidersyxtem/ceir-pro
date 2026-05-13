@@ -11,6 +11,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
+    // Variable တွေကို Class level မှာ ကြေညာထားမှ Function အားလုံးက လှမ်းသုံးလို့ရမှာပါ
     private lateinit var webView: WebView
     private lateinit var resultLayout: LinearLayout
     private lateinit var txtInfo: TextView
@@ -20,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialize Views
+        // View တွေကို ID နဲ့ ချိတ်ဆက်ခြင်း
         webView = findViewById(R.id.webView)
         resultLayout = findViewById(R.id.resultLayout)
         txtInfo = findViewById(R.id.txtInfo)
@@ -44,6 +45,7 @@ class MainActivity : AppCompatActivity() {
         
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
+                // Website ထဲက data နှိုက်မယ့် script
                 val script = """
                     var check = setInterval(function() {
                         var table = document.querySelector('table');
@@ -68,8 +70,10 @@ class MainActivity : AppCompatActivity() {
             webView.visibility = View.GONE
             resultLayout.visibility = View.VISIBLE
             
+            // UI Update လုပ်ခြင်း
             txtInfo.text = "Device: $brand $model"
             
+            // April 2024 Logic
             if (date.contains("2024") && !date.contains("Jan") && !date.contains("Feb") && !date.contains("Mar")) {
                 txtStatus.text = "AFTER APRIL 2024 (TAX REQUIRED)"
                 txtStatus.setTextColor(Color.RED)
