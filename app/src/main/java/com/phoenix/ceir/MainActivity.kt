@@ -11,7 +11,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
-    // Variable တွေကို class level မှာ ကြေညာခြင်း
+    // Variable တွေကို class ရဲ့ အပြင်ဘက်ဆုံးမှာ Nullable အဖြစ် ကြေညာထားပါမယ်
     private var webView: WebView? = null
     private var resultLayout: LinearLayout? = null
     private var txtInfo: TextView? = null
@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // View တွေကို သေချာစွာ ချိတ်ဆက်ခြင်း
+        // onCreate ထဲမှာ View တွေကို စနစ်တကျ ချိတ်ဆက်ပါမယ်
         webView = findViewById(R.id.webView)
         resultLayout = findViewById(R.id.resultLayout)
         txtInfo = findViewById(R.id.txtInfo)
@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
 
         btnBack.setOnClickListener {
+            // အဖြေပြမျက်နှာပြင်ကို ပိတ်ပြီး Website ဆီ ပြန်သွားခြင်း
             resultLayout?.visibility = View.GONE
             webView?.visibility = View.VISIBLE
             webView?.reload()
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         
         webView?.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
+                // Website မှာ အဖြေပေါ်လာတာနဲ့ data နှိုက်မယ့် logic
                 val script = """
                     var check = setInterval(function() {
                         var table = document.querySelector('table');
@@ -65,12 +67,15 @@ class MainActivity : AppCompatActivity() {
 
     @JavascriptInterface
     fun onResult(brand: String, model: String, date: String) {
+        // UI ကို update လုပ်မှာဖြစ်လို့ UI Thread (Main Thread) ပေါ်မှာ Run ရပါမယ်
         runOnUiThread {
             webView?.visibility = View.GONE
             resultLayout?.visibility = View.VISIBLE
             
+            // အချက်အလက်များ ထည့်သွင်းခြင်း
             txtInfo?.text = "Device: $brand $model"
             
+            // April 2024 ရက်စွဲ စစ်ဆေးခြင်း
             if (date.contains("2024") && !date.contains("Jan") && !date.contains("Feb") && !date.contains("Mar")) {
                 txtStatus?.text = "AFTER APRIL 2024 (TAX REQUIRED)"
                 txtStatus?.setTextColor(Color.RED)
@@ -82,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
+        // ဖုန်းရဲ့ Back Key နှိပ်ရင် အဖြေပြမျက်နှာပြင်ကနေ မူရင်း Website ဆီ ပြန်သွားစေရန်
         if (resultLayout?.visibility == View.VISIBLE) {
             resultLayout?.visibility = View.GONE
             webView?.visibility = View.VISIBLE
