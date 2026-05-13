@@ -13,17 +13,23 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var resultLayout: LinearLayout
+    private lateinit var txtInfo: TextView
+    private lateinit var txtStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Initialize Views
         webView = findViewById(R.id.webView)
         resultLayout = findViewById(R.id.resultLayout)
+        txtInfo = findViewById(R.id.txtInfo)
+        txtStatus = findViewById(R.id.txtStatus)
+        val btnBack: Button = findViewById(R.id.btnBack)
 
         setupWebView()
 
-        findViewById<Button>(R.id.btnBack).setOnClickListener {
+        btnBack.setOnClickListener {
             resultLayout.visibility = View.GONE
             webView.visibility = View.VISIBLE
             webView.reload()
@@ -38,7 +44,6 @@ class MainActivity : AppCompatActivity() {
         
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                // Monitor the result table
                 val script = """
                     var check = setInterval(function() {
                         var table = document.querySelector('table');
@@ -63,16 +68,26 @@ class MainActivity : AppCompatActivity() {
             webView.visibility = View.GONE
             resultLayout.visibility = View.VISIBLE
             
-            findViewById<TextView>(R.id.txtInfo).text = "Device: $brand $model"
-            val status = findViewById<TextView>(R.id.txtStatus)
+            txtInfo.text = "Device: $brand $model"
             
             if (date.contains("2024") && !date.contains("Jan") && !date.contains("Feb") && !date.contains("Mar")) {
-                status.text = "AFTER APRIL 2024 (TAX REQUIRED)"
-                status.setTextColor(Color.RED)
+                txtStatus.text = "AFTER APRIL 2024 (TAX REQUIRED)"
+                txtStatus.setTextColor(Color.RED)
             } else {
-                status.text = "BEFORE APRIL 2024 (CLEAN)"
-                status.setTextColor(Color.GREEN)
+                txtStatus.text = "BEFORE APRIL 2024 (CLEAN)"
+                txtStatus.setTextColor(Color.GREEN)
             }
+        }
+    }
+
+    override fun onBackPressed() {
+        if (resultLayout.visibility == View.VISIBLE) {
+            resultLayout.visibility = View.GONE
+            webView.visibility = View.VISIBLE
+        } else if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
         }
     }
 }
