@@ -28,9 +28,7 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        btnBack.setOnClickListener {
-            showWebsite()
-        }
+        btnBack.setOnClickListener { showWebsite() }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -38,30 +36,36 @@ class MainActivity : AppCompatActivity() {
         val webSettings = webView?.settings
         webSettings?.javaScriptEnabled = true
         webSettings?.domStorageEnabled = true
-        webSettings?.databaseEnabled = true
         webSettings?.userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
         
         webView?.addJavascriptInterface(this, "AndroidBridge")
         
         webView?.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                // UI အသစ်က 'Finished' button သို့မဟုတ် 'Tax Payment Status' ဆိုတဲ့ စာသားပေါ်လာတာနဲ့ data နှိုက်ပါမယ်
+                // UI အသစ်၏ Elements များကို ပိုမိုတိကျစွာ ရှာဖွေမည်
                 val script = """
                     (function() {
                         var checkResult = setInterval(function() {
-                            // UI အသစ်တွင် စာသားများကို ရှာဖွေခြင်း
                             var bodyText = document.body.innerText;
-                            if (bodyText.includes('Tax Payment Status') || bodyText.includes('Finished')) {
+                            // 'Finished' ခလုတ် ပေါ်လာလျှင် အဖြေထွက်ပြီဟု သတ်မှတ်သည်
+                            if (bodyText.includes('Finished')) {
                                 
-                                // IMEI status, Tax status စတာတွေကို စုစည်းခြင်း
-                                var imei = "Checked";
-                                var taxStatus = bodyText.includes('Paid') ? "Paid" : "Unpaid";
-                                var blockStatus = bodyText.includes('Allowed') ? "Allowed" : "Blocked";
-                                
-                                // အခု UI အသစ်မှာ Brand/Date တိုက်ရိုက်မပါရင် IMEI နံပါတ်ကိုပဲ အချက်အလက်အဖြစ် ပို့ပေးပါမယ်
-                                var imeiDisplay = document.querySelector('.text-2xl') ? document.querySelector('.text-2xl').innerText : "Device Info";
+                                // ၁။ IMEI နံပါတ်ကို ရှာဖွေခြင်း (ပုံမှန်အားဖြင့် အပေါ်ဆုံးတွင် ရှိသည်)
+                                var imeiText = "Unknown IMEI";
+                                var allParagraphs = document.querySelectorAll('p');
+                                for (var p of allParagraphs) {
+                                    if (p.innerText.match(/^\d{15}/)) { // ၁၅ လုံးပါသော IMEI ကို ရှာသည်
+                                        imeiText = p.innerText;
+                                        break;
+                                    }
+                                }
 
-                                AndroidBridge.onResult(imeiDisplay, taxStatus, blockStatus);
+                                // ၂။ Tax Status နှင့် Blocking Status ကို စာသားဖြင့် ရှာဖွေခြင်း
+                                var isPaid = bodyText.includes('Paid');
+                                var isAllowed = bodyText.includes('Allowed');
+
+                                // ၃။ Data အားလုံးကို Android ဆီ ပို့လွှတ်ခြင်း
+                                AndroidBridge.onDetailedResult(imeiText, isPaid, isAllowed);
                                 clearInterval(checkResult);
                             }
                         }, 1000);
@@ -74,19 +78,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     @JavascriptInterface
-    fun onResult(displayInfo: String, tax: String, block: String) {
+    fun onDetailedResult(imei: String, isPaid: Boolean, isAllowed: Boolean) {
         runOnUiThread {
             webView?.visibility = View.GONE
             resultLayout?.visibility = View.VISIBLE
             
-            txtBrandInfo?.text = "IMEI: $displayInfo\nTAX: $tax\nSTATUS: $block"
+            // အချက်အလက်များ အသေးစိတ် ပြသခြင်း
+            val taxText = if (isPaid) "PAID ✅" else "UNPAID ❌"
+            val blockText = if (isAllowed) "ALLOWED ✅" else "BLOCKED ❌"
             
-            // Tax Paid ဖြစ်ရင် အစိမ်းရောင်၊ Unpaid ဆိုရင် အနီရောင် ပြပါမယ်
-            if (tax.contains("Paid", ignoreCase = true)) {
-                txtAprilStatus?.text = "VERIFIED: TAX PAID ✅"
+            txtBrandInfo?.text = "IMEI: $imei\nTAX: $taxText\nSTATUS: $blockText"
+            
+            // Visual Alert Logic
+            if (isPaid && isAllowed) {
+                txtAprilStatus?.text = "VERIFIED: CLEAN DEVICE ✨"
                 txtAprilStatus?.setBackgroundColor(Color.parseColor("#10B981")) // Green
             } else {
-                txtAprilStatus?.text = "ALERT: TAX UNPAID ⚠️"
+                txtAprilStatus?.text = "ALERT: CHECK TAX STATUS ⚠️"
                 txtAprilStatus?.setBackgroundColor(Color.parseColor("#E11D48")) // Red
             }
             txtAprilStatus?.setTextColor(Color.WHITE)
@@ -100,12 +108,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        if (resultLayout?.visibility == View.VISIBLE) {
-            showWebsite()
-        } else if (webView?.canGoBack() == true) {
-            webView?.goBack()
-        } else {
-            super.onBackPressed()
-        }
+        if (resultLayout?.visibility == View.VISIBLE) showWebsite()
+        else if (webView?.canGoBack() == true) webView?.goBack()
+        else super.onBackPressed()
     }
 }
