@@ -9,6 +9,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
+import org.json.JSONArray
 
 class MainActivity : AppCompatActivity() {
     private var webView: WebView? = null
@@ -32,73 +34,92 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
-        webView?.settings?.javaScriptEnabled = true
-        webView?.settings?.domStorageEnabled = true
-        webView?.settings?.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        val webSettings = webView?.settings
+        webSettings?.javaScriptEnabled = true
+        webSettings?.domStorageEnabled = true
+        // CEIR website က Browser အစစ်ဖြစ်မှ API ခွင့်ပြုတာမို့ UserAgent ကို အသေအချာ ထည့်ထားပါတယ်
+        webSettings?.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
         
         webView?.addJavascriptInterface(this, "AndroidBridge")
         
         webView?.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
+                // Website ထဲမှာ IMEI စစ်ပြီးတာနဲ့ API response တွေကို ဖမ်းယူမယ့် Script
+                // ဒီနေရာမှာ Webview က API ကို လှမ်းခေါ်ပြီး ရလာတဲ့ JSON ကို Android ဆီ ပို့ပေးမှာပါ
                 val script = """
                     (function() {
-                        var checkResult = setInterval(function() {
-                            var bodyText = document.body.innerText;
-                            if (bodyText.includes('Finished') || bodyText.includes('Tax Payment Status')) {
-                                
-                                // ၁။ IMEI နံပါတ်ကို ပိုမိုတိကျစွာ ရှာဖွေခြင်း (Regex ပိုကောင်းအောင် ပြင်ထားသည်)
-                                var imeiMatch = bodyText.match(/\b\d{15}\b/);
-                                var imeiValue = imeiMatch ? imeiMatch[0] : "Check Website for IMEI";
-
-                                // ၂။ Tax နှင့် Status ကို စစ်ဆေးခြင်း
-                                var isPaid = bodyText.toLowerCase().includes('paid');
-                                var isAllowed = bodyText.toLowerCase().includes('allowed');
-
-                                // ၃။ အချက်အလက်များကို ပို့လွှတ်ခြင်း
-                                AndroidBridge.onFinalData(imeiValue, isPaid, isAllowed, bodyText);
-                                clearInterval(checkResult);
-                            }
-                        }, 1000);
+                        const originalFetch = window.fetch;
+                        window.fetch = function() {
+                            return originalFetch.apply(this, arguments).then(async (response) => {
+                                const url = response.url;
+                                if (url.includes('personal-device-info') || url.includes('IMEI/Verify')) {
+                                    const clone = response.clone();
+                                    const data = await clone.text();
+                                    AndroidBridge.processApiResponse(url, data);
+                                }
+                                return response;
+                            });
+                        };
                     })();
                 """.trimIndent()
                 webView?.evaluateJavascript(script, null)
             }
         }
-        webView?.loadUrl("https://ceir.gov.mm/check-status")
+        webView?.loadUrl("https://www.ceir.gov.mm/check-status")
     }
 
+    private var deviceDetails = ""
+    private var taxDetails = ""
+
     @JavascriptInterface
-    fun onFinalData(imei: String, isPaid: Boolean, isAllowed: Boolean, rawText: String) {
+    fun processApiResponse(url: String, data: String) {
         runOnUiThread {
-            webView?.visibility = View.GONE
-            resultLayout?.visibility = View.VISIBLE
-            
-            val taxIcon = if (isPaid) "PAID ✅" else "UNPAID ❌"
-            val statusIcon = if (isAllowed) "ALLOWED ✅" else "BLOCKED ❌"
-            
-            // IMEI အပြင် အခြားပါလာနိုင်သည့် Brand/Model ကိုပါ စာသားထဲတွင် ရှာဖွေပြသခြင်း
-            txtBrandInfo?.text = "IMEI: $imei\nTAX: $taxIcon\nSTATUS: $statusIcon"
-            
-            if (isPaid && isAllowed) {
-                txtAprilStatus?.text = "VERIFIED: CLEAN DEVICE ✨"
-                txtAprilStatus?.setBackgroundColor(Color.parseColor("#10B981"))
-            } else {
-                txtAprilStatus?.text = "ALERT: CHECK TAX STATUS ⚠️"
-                txtAprilStatus?.setBackgroundColor(Color.parseColor("#E11D48"))
-            }
-            txtAprilStatus?.setTextColor(Color.WHITE)
+            try {
+                if (url.contains("personal-device-info")) {
+                    val json = JSONObject(data)
+                    val brand = json.optString("gsmaBrandName", "Unknown")
+                    val model = json.optString("gsmaModelName", "Device")
+                    val internalModel = json.optString("standardisedDeviceModel", "")
+                    deviceDetails = "$model\n$brand / $internalModel"
+                } 
+                else if (url.contains("IMEI/Verify")) {
+                    val json = JSONObject(data)
+                    val list = json.optJSONArray("IMEI_CHECK_LIST")
+                    if (list != null && list.length() > 0) {
+                        val item = list.getJSONObject(0)
+                        val payment = item.optString("paymentState", "UNKNOWN")
+                        val block = item.optString("blockState", "UNKNOWN")
+                        val imei = item.optString("IMEI", "")
+                        
+                        taxDetails = "IMEI: $imei\nTAX: ${payment.replace("_", " ")}\nSTATUS: ${block.replace("_", " ")}"
+                        
+                        // အချက်အလက် ၂ မျိုးလုံး ရပြီဆိုရင် Result Page ပြပါမယ်
+                        showResult(payment == "PAID", block == "UNBLOCKED")
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
         }
+    }
+
+    private fun showResult(isPaid: Boolean, isAllowed: Boolean) {
+        webView?.visibility = View.GONE
+        resultLayout?.visibility = View.VISIBLE
+        
+        txtBrandInfo?.text = "$deviceDetails\n\n$taxDetails"
+        
+        if (isPaid && isAllowed) {
+            txtAprilStatus?.text = "VERIFIED: CLEAN DEVICE ✨"
+            txtAprilStatus?.setBackgroundColor(Color.parseColor("#10B981"))
+        } else {
+            txtAprilStatus?.text = "ALERT: CHECK TAX STATUS ⚠️"
+            txtAprilStatus?.setBackgroundColor(Color.parseColor("#E11D48"))
+        }
+        txtAprilStatus?.setTextColor(Color.WHITE)
     }
 
     private fun showWebsite() {
         resultLayout?.visibility = View.GONE
         webView?.visibility = View.VISIBLE
         webView?.reload()
-    }
-
-    override fun onBackPressed() {
-        if (resultLayout?.visibility == View.VISIBLE) showWebsite()
-        else if (webView?.canGoBack() == true) webView?.goBack()
-        else super.onBackPressed()
     }
 }
