@@ -1,0 +1,53 @@
+ape(atob(b64_pData)));
+                var pData = pDataStr === "SKIP" ? {} : JSON.parse(pDataStr);
+                renderResult(vData.IMEI_CHECK_LIST[0], pData);
+                updateStatus("Check Complete.");
+            } catch(e) { updateStatus("Error: " + e.message); }
+            document.getElementById("btnCheck").disabled = false;
+        }
+
+        function engineError(msg) {
+            updateStatus("Error: " + msg);
+            document.getElementById("btnCheck").disabled = false;
+        }
+
+        function renderResult(item, p) {
+            if (!item) return;
+            var ok = "<span style='color:var(--success);font-weight:bold;'>&#10004;</span>";
+            var no = "<span style='color:var(--error);font-weight:bold;'>&#10008;</span>";
+            var isInc = item.Incorrect || false;
+            var payRaw = String(item.paymentState || "").toUpperCase();
+            var blockRaw = item.blockState || "N/A";
+            var statusIcon = isInc ? no : ok;
+            var statusText = isInc ? "Incorrect" : "မှန်ကန်ပါသည်။";
+            var blockIcon = (!isInc && blockRaw.toUpperCase() === "UNBLOCKED") ? ok : no;
+            var taxIcon, taxText;
+            if (isInc) { taxIcon = no; taxText = item.paymentState || "N/A"; }
+            else if (payRaw === "ACCUMULATION") { taxIcon = ok; taxText = "<span style='color:var(--success);font-weight:bold;'>၄ လပိုင်းအရှေ့က Free Pass ဖုန်း</span>"; }
+            else if (payRaw === "PAID") { taxIcon = ok; taxText = "<span style='color:var(--success);font-weight:bold;'>အခွန်ပေးဆောင်ထားပြီးဖြစ်ပါသည်။</span>"; }
+            else { taxIcon = no; taxText = item.paymentState || "N/A"; }
+
+            document.getElementById("resultHtml").innerHTML =
+                '<h3 style="color:var(--start_bg);margin-top:0;">CEIR Report</h3>' +
+                '<table style="background:var(--panel_bg);border:1px solid var(--border);border-radius:8px;">' +
+                '<tr><td width="45%"><b>IMEI နံပါတ်</b></td><td class="imei-hl">' + (item.IMEI || "N/A") + '</td></tr>' +
+                '<tr><td>IMEI အခြေအနေ</td><td>' + statusIcon + ' ' + statusText + '</td></tr>' +
+                '<tr><td>Block အခြေအနေ</td><td>' + blockIcon + ' ' + blockRaw + '</td></tr>' +
+                '<tr><td>အခွန်ဆောင်ထားမှု</td><td>' + taxIcon + ' ' + taxText + '</td></tr>' +
+                '<tr><td>Grace Period</td><td>' + (item.endOfGracePeriod || "N/A") + '</td></tr>' +
+                '</table>' +
+                '<h3 style="color:var(--text_muted);margin-top:20px;font-size:15px;">Device အမျိုးအစား (GSMA)</h3>' +
+                '<table style="border:1px solid var(--border);">' +
+                '<tr style="background:var(--border);"><td><b>Brand Name</b></td><td>' + (p.gsmaBrandName || "N/A") + '</td></tr>' +
+                '<tr><td><b>Manufacturer</b></td><td>' + (p.gsmaManufacturer || "N/A") + '</td></tr>' +
+                '<tr style="background:var(--border);"><td><b>Model Name</b></td><td>' + (p.gsmaModelName || "N/A") + '</td></tr>' +
+                '<tr><td><b>Marketing Name</b></td><td>' + (p.gsmaMarketingName || "N/A") + '</td></tr>' +
+                '<tr style="background:var(--border);"><td><b>OS</b></td><td>' + (p.gsmaOperatingSystem || "N/A") + '</td></tr>' +
+                '<tr><td><b>Device Type</b></td><td>' + (p.gsmaDeviceType || "N/A") + '</td></tr>' +
+                '<tr style="background:var(--border);"><td><b>TAC Code</b></td><td>' + (p.tac || "N/A") + '</td></tr>' +
+                '<tr><td><b>SIM Slots</b></td><td>' + (p.gsmaImeiQuantitySupport || "0") + '</td></tr>' +
+                '</table>';
+        }
+    </script>
+</body>
+</html>
