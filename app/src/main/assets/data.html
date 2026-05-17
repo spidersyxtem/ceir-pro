@@ -1,5 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEIR Pro Checker</title>
+    <style>
+        :root {
+            --panel_bg: #1e1e24;
+            --border: #33333c;
+            --text: #ffffff;
+            --primary: #4f46e5;
+        }
+        body {
+            background-color: #121214;
+            color: var(--text);
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 15px;
+            margin: 0;
+        }
+        .container { max-width: 500px; margin: 0 auto; }
+        input, button {
+            width: 100%; padding: 12px; margin-top: 10px;
+            border-radius: 8px; border: 1px solid var(--border);
+            box-sizing: border-box; font-size: 16px;
+        }
+        input { background: #1a1a1e; color: #fff; }
+        button { background: var(--primary); color: #fff; font-weight: bold; cursor: pointer; border: none;}
+        button:disabled { background: #444; color: #888; }
+        #status { margin-top: 15px; color: #aaa; text-align: center; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        td { padding: 10px; border-bottom: 1px solid var(--border); color: #ccc; }
+        .ok { color: #10b981; font-weight: bold; }
+        .no { color: #ef4444; font-weight: bold; }
+        .imei-hl { color: #f59e0b; font-weight: bold; font-family: monospace; }
+        h3 { margin-top: 20px; font-size: 16px; border-left: 4px solid var(--primary); padding-left: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="text-align:center; margin-bottom:5px;">Auto Generate VPN</h2>
+        <div style="text-align:center; margin-bottom:20px;"><span style="display:inline-block; width:10px; height:10px; background:#10b981; border-radius:50%; margin-right:5px;"></span>Active Status</div>
+        
+        <input type="number" id="imeiInput" placeholder="Enter 15-digit IMEI" maxlength="15">
+        <button id="btnCheck" onclick="startCheck()">Check IMEI</button>
+        <div id="status">Ready</div>
+        <div id="resultHtml"></div>
+    </div>
+
+    <script>
+        var challengeData = null;
+        var currentImei = "";
+
+        // WebView ရဲ့ Android JavascriptInterface က တိုက်ရိုက် မချိတ်မိရင် သုံးဖို့ fallback polyfill
+        if (typeof B4A === 'undefined') {
+            window.B4A = {
+                CallSub: function(subName) {
+                    var args = Array.prototype.slice.call(arguments, 1);
+                    var payload = { sub: subName, args: args };
+                    var b64Data = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+                    window.location.href = "b4a://call?data=" + b64Data;
+                }
+            };
+        }
+
+        function updateStatus(msg) {
+            document.getElementById("status").innerText = msg;
+        }
+
+        function startCheck() {
+            var imei = document.getElementById("imeiInput").value.trim();
+            if (imei.length !== 15) {
+                alert("Please enter a valid 15-digit IMEI number.");
+                return;
+            }
+            currentImei = imei;
+            document.getElementById("btnCheck").disabled = true;
+            document.getElementById("resultHtml").innerHTML = "";
+            updateStatus("Requesting Altcha challenge...");
+            
+            // Native ဘက်က Request Challenge ကို လှမ်းခေါ်ခြင်း
+            B4A.CallSub("Bridge_RequestChallenge");
+        }
+
+        function receiveChallenge(b64Body) {
+            try {
+                var dataStr = decodeURIComponent(escape(atob(b64Body)));
                 challengeData = JSON.parse(dataStr);
                 updateStatus("Solving challenge...");
+                
+                // Native Altcha Solver ကို လှမ်းခေါ်ခြင်း
                 B4A.CallSub("StartAltchaSolver",
                     challengeData.salt,
                     challengeData.challenge,
