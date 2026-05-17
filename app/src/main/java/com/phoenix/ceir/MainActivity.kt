@@ -48,7 +48,9 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (url != null && url.contains("ceir.gov.mm")) {
-                    injectUI()
+                    mainHandler.postDelayed({
+                        injectUI()
+                    }, 2000)
                 }
             }
         }
