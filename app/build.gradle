@@ -13,28 +13,39 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+        
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            [span_81](start_span)minifyEnabled false[span_81](end_span)
-            [span_82](start_span)proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'[span_82](end_span)
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
     compileOptions {
-        [span_83](start_span)sourceCompatibility JavaVersion.VERSION_17[span_83](end_span)
-        [span_84](start_span)targetCompatibility JavaVersion.VERSION_17[span_84](end_span)
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        [span_85](start_span)jvmTarget = '17'[span_85](end_span)
+        // GitHub Actions မှာ Error တက်စေတဲ့ '=' အမှတ်အသားကို ဖယ်ရှားပြီး 
+        // Groovy စနစ်မှန်အတိုင်း ပြင်ဆင်ထားပါတယ်
+        jvmTarget = '17' 
     }
 }
 
 dependencies {
-    [span_86](start_span)implementation 'androidx.core:core-ktx:1.10.1'[span_86](end_span)
-    [span_87](start_span)implementation 'androidx.appcompat:appcompat:1.6.1'[span_87](end_span)
-    [span_88](start_span)implementation 'com.google.android.material:material:1.9.0'[span_88](end_span)
-    [span_89](start_span)implementation 'com.squareup.okhttp3:okhttp:4.12.0'[span_89](end_span)
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    
+    // Web Network Requests များအတွက် သုံးထားသော OkHttp Library
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    
+    // Testing Libraries (လိုအပ်ပါက သုံးနိုင်ရန်)
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
