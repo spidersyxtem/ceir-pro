@@ -47,10 +47,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                if (url != null
-                    && url.contains("ceir.gov.mm")
-                    && !url.contains("__cf_chl")
-                    && !url.contains("cdn-cgi")) {
+                if (url != null && url.contains("ceir.gov.mm")) {
                     injectUI()
                 }
             }
