@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
 
-        // JavaScript Interface ချိတ်ဆက်မှု
+        // မူရင်း Logic အတိုင်း တိကျစွာ အလုပ်လုပ်မည့် JavaScript Interface
         webView.addJavascriptInterface(object {
             @JavascriptInterface
             fun CallSub(sub: String, vararg args: String) {
@@ -78,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         webView.loadUrl("https://ceir.gov.mm")
 
-        // စာရိုက်၍မရသည့် Focus Bug ကို ဖြေရှင်းရန် နည်းလမ်းများ
+        // WebView focus နှင့် keyboard ပွင့်စေရန် လုပ်ဆောင်ချက်များ
         webView.requestFocus()
         webView.requestFocusFromTouch()
         
