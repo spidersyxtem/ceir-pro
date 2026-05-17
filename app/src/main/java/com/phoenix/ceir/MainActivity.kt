@@ -1,3 +1,110 @@
+package com.phoenix.ceir
+
+import android.annotation.SuppressLint
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
+import android.webkit.*
+import androidx.appcompat.app.AppCompatActivity
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import java.security.MessageDigest
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var webView: WebView
+    private val client = OkHttpClient()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        webView = findViewById(R.id.webView)
+
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            userAgentString = userAgent
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        }
+
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+                if (url.startsWith("b4a://call")) {
+                    handleBridge(url)
+                    return true
+                }
+                return false
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                if (url != null
+                    && url.contains("ceir.gov.mm")
+                    && !url.contains("__cf_chl")
+                    && !url.contains("cdn-cgi")) {
+                    injectUI()
+                }
+            }
+        }
+
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+        webView.loadUrl("https://ceir.gov.mm")
+    }
+
+    private fun injectUI() {
+        val html = assets.open("data.html").bufferedReader().use { it.readText() }
+        val encoded = Base64.encodeToString(html.toByteArray(), Base64.NO_WRAP)
+        webView.evaluateJavascript(
+            "document.open(); document.write(atob('" + encoded + "')); document.close();",
+            null
+        )
+    }
+
+    private fun handleBridge(url: String) {
+        val uri = android.net.Uri.parse(url)
+        val dataB64 = uri.getQueryParameter("data") ?: return
+        val json = JSONObject(String(Base64.decode(dataB64, Base64.DEFAULT)))
+        val sub = json.getString("sub")
+        val args = json.optJSONArray("args")
+
+        when (sub) {
+            "Bridge_RequestChallenge" -> requestChallenge()
+            "StartAltchaSolver" -> {
+                val salt = args?.getString(0) ?: return
+                val challenge = args.getString(1)
+                val maxNumber = args.getString(2).toLong()
+                solveAltcha(salt, challenge, maxNumber)
+            }
+            "Bridge_VerifyImei" -> {
+                val b64Payload = args?.getString(0) ?: return
+                val imei = args.getString(1)
+                verifyImei(b64Payload, imei)
+            }
+        }
+    }
+
+    private fun requestChallenge() {
+        val cookies = CookieManager.getInstance().getCookie("https://ceir.gov.mm") ?: ""
+        val request = Request.Builder()
+            .url("https://ceir.gov.mm/openapi/API/Auth/altcha/altcha")
+            .header("User-Agent", userAgent)
+            .header("Cookie", cookies)
+            .header("Referer", "https://ceir.gov.mm/")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                callJs("engineError('network error')")
+            }
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string() ?: ""
                 val b64 = Base64.encodeToString(body.toByteArray(), Base64.NO_WRAP)
