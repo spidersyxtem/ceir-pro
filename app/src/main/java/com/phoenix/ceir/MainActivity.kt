@@ -60,12 +60,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun injectUI() {
-        val html = assets.open("data.html").bufferedReader().use { it.readText() }
-        val encoded = Base64.encodeToString(html.toByteArray(), Base64.NO_WRAP)
-        webView.evaluateJavascript(
-            "document.open(); document.write(atob('" + encoded + "')); document.close();",
-            null
-        )
+    val html = assets.open("data.html").bufferedReader().use { it.readText() }
+    webView.loadDataWithBaseURL(
+        "https://ceir.gov.mm",
+        html,
+        "text/html",
+        "UTF-8",
+        null
+    )
     }
 
     private fun handleBridge(url: String) {
