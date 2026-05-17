@@ -51,14 +51,14 @@
         var challengeData = null;
         var currentImei = "";
 
-        // WebView ရဲ့ Android JavascriptInterface က တိုက်ရိုက် မချိတ်မိရင် သုံးဖို့ fallback polyfill
+        // Android WebView ဘက်သို့ Direct Bridge ကွန်နက်ရှင် Polyfill
         if (typeof B4A === 'undefined') {
             window.B4A = {
                 CallSub: function(subName) {
                     var args = Array.prototype.slice.call(arguments, 1);
-                    var payload = { sub: subName, args: args };
-                    var b64Data = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-                    window.location.href = "b4a://call?data=" + b64Data;
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.B4A) {
+                        // iOS/Custom implementations ကျောထောက်နောက်ခံအတွက်
+                    }
                 }
             };
         }
@@ -78,8 +78,20 @@
             document.getElementById("resultHtml").innerHTML = "";
             updateStatus("Requesting Altcha challenge...");
             
-            // Native ဘက်က Request Challenge ကို လှမ်းခေါ်ခြင်း
-            B4A.CallSub("Bridge_RequestChallenge");
+            // Native Bridge သို့ Logic အတိုင်း တိုက်ရိုက်တောင်းဆိုခြင်း
+            if (window.B4A && typeof window.B4A.CallSub === 'function') {
+                window.B4A.CallSub("Bridge_RequestChallenge");
+            } else {
+                // အကယ်၍ addJavascriptInterface က သုံးမရသေးလျှင် URL scheme အဖြစ် fallback သွားရန် logic
+                var payload = { sub: "Bridge_RequestChallenge", args: [] };
+                window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(payload));
+            }
+        }
+
+        function b64EncodeUnicode(str) {
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+                return String.fromCharCode('0x' + p1);
+            }));
         }
 
         function receiveChallenge(b64Body) {
@@ -88,12 +100,16 @@
                 challengeData = JSON.parse(dataStr);
                 updateStatus("Solving challenge...");
                 
-                // Native Altcha Solver ကို လှမ်းခေါ်ခြင်း
-                B4A.CallSub("StartAltchaSolver",
-                    challengeData.salt,
-                    challengeData.challenge,
-                    String(challengeData.maxnumber || 1000000)
-                );
+                if (window.B4A && typeof window.B4A.CallSub === 'function') {
+                    window.B4A.CallSub("StartAltchaSolver",
+                        challengeData.salt,
+                        challengeData.challenge,
+                        String(challengeData.maxnumber || 1000000)
+                    );
+                } else {
+                    var payload = { sub: "StartAltchaSolver", args: [challengeData.salt, challengeData.challenge, String(challengeData.maxnumber || 1000000)] };
+                    window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(payload));
+                }
             } catch(err) {
                 updateStatus("Challenge error: " + err.message);
                 document.getElementById("btnCheck").disabled = false;
@@ -115,7 +131,13 @@
                 signature: challengeData.signature
             };
             var b64Payload = btoa(JSON.stringify(payload));
-            B4A.CallSub("Bridge_VerifyImei", b64Payload, currentImei);
+            
+            if (window.B4A && typeof window.B4A.CallSub === 'function') {
+                window.B4A.CallSub("Bridge_VerifyImei", b64Payload, currentImei);
+            } else {
+                var callPayload = { sub: "Bridge_VerifyImei", args: [b64Payload, currentImei] };
+                window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(callPayload));
+            }
         }
 
         function receiveFinalResult(b64_vData, b64_pData) {
