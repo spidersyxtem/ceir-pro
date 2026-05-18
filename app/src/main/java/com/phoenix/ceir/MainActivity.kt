@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_parent) // သင့် layout နာမည်အတိုင်း ပြင်နိုင်သည် (ဥပမာ- activity_main)
+        setContentView(R.layout.activity_main) // 🛠️ သင့်ရဲ့ XML ဖိုင်အစစ်ဖြစ်တဲ့ activity_main သို့ ပြန်လည်ပြင်ဆင်ထားပါတယ်
 
         webView = findViewById(R.id.webView)
 
