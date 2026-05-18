@@ -22,12 +22,14 @@ class MainActivity : AppCompatActivity() {
     private val client = OkHttpClient()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+    
+    // UI တစ်ကြိမ်သာ Inject ဖြစ်စေရန်နှင့် အော်တို Refresh မဖြစ်စေရန် ထိန်းချုပ်မည့် Flag
     private var isUiInjected = false
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_parent) // သင့် layout နာမည်အတိုင်း ပြင်နိုင်သည် (ဥပမာ- activity_main)
 
         webView = findViewById(R.id.webView)
 
@@ -50,6 +52,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                // UI မရှိသေးမှသာ တစ်ကြိမ်တည်း ဆွဲတင်ရန် သေချာစွာ စစ်ဆေးခြင်း (အော်တိုစာသားပျောက်ခြင်းမှ ကာကွယ်ရန်)
                 if (url != null && url.contains("ceir.gov.mm") && !isUiInjected) {
                     isUiInjected = true
                     mainHandler.postDelayed({
@@ -62,6 +65,7 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         webView.loadUrl("https://ceir.gov.mm")
 
+        // စာရိုက်ရအဆင်ပြေစေရန် Focus ရယူခြင်းစနစ်
         webView.requestFocus()
         webView.requestFocusFromTouch()
         webView.setOnTouchListener { v, event ->
@@ -88,6 +92,7 @@ class MainActivity : AppCompatActivity() {
                 null
             )
         } catch (e: Exception) {
+            Log.e("MainActivity", "Assets data.html load failed: ${e.message}")
             callJs("engineError('Local UI load failed')")
         }
     }
@@ -119,8 +124,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // 🛠️ Cloudflare ကို ကျော်ဖြတ်ရန် WebView AJAX JavaScript သို့ ပြောင်းလဲထားသော မူရင်း Request Challenge Logic
+    // 🛠️ Cloudflare 403 / HTML Token Error ကို ကျော်ဖြတ်ရန် မွမ်းမံထားသော နေရာဖြစ်ပါတယ်
     private fun requestChallenge() {
+        // WebView Engine ကိုယ်တိုင်ကို နောက်ကွယ်ကနေ AJAX Fetch ခေါ်ခိုင်းပြီး Cookie Session အမှန်အတိုင်း သုံးစေခြင်း
         val jsFetch = """
             fetch('https://ceir.gov.mm/openapi/API/Auth/altcha/altcha')
                 .then(res => res.text())
