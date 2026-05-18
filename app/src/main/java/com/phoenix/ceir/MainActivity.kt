@@ -9,21 +9,27 @@ import android.util.Log
 import android.view.MotionEvent
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject // 👈 တက်နေတဲ့ Error ကို ဖြေရှင်းရန် Import လိုင်း ထည့်သွင်းထားပါတယ်
+import java.io.IOException
 import java.security.MessageDigest
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private val client = OkHttpClient()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
     
-    // UI တစ်ကြိမ်သာ Inject ဖြစ်စေရန် ထိန်းချုပ်မည့် Flag
+    // UI တစ်ကြိမ်သာ Inject ဖြစ်စေရန်နှင့် အော်တို Refresh မဖြစ်စေရန် ထိန်းချုပ်မည့် Flag
     private var isUiInjected = false
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main) // သင့် Layout နာမည်အတိုင်း ပြင်ဆင်ထားပါသည်
+        setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
 
@@ -118,7 +124,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // 🛠️ WebView AJAX Fetch စနစ်ဖြင့် Challenge တောင်းဆိုခြင်း (Cloudflare ကျော်ပြီးသားဖြစ်သည်)
+    // WebView AJAX Fetch စနစ်ဖြင့် Challenge တောင်းဆိုခြင်း (Cloudflare ကျော်ပြီးသားဖြစ်သည်)
     private fun requestChallenge() {
         val jsFetch = """
             fetch('https://ceir.gov.mm/openapi/API/Auth/altcha/altcha')
@@ -154,45 +160,50 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    // 🛠️ OkHttp အစား Cloudflare Block လုံးဝမဖြစ်စေမည့် WebView Engine ပါဝင်သော IMEI Verification Logic အသစ်
+    // Cloudflare Block လုံးဝမဖြစ်စေမည့် WebView Engine ပါဝင်သော IMEI Verification Logic
     private fun verifyImei(b64Payload: String, imei: String) {
+        val cookies = CookieManager.getInstance().getCookie("https://ceir.gov.mm") ?: ""
         val payloadStr = String(Base64.decode(b64Payload, Base64.DEFAULT))
         val altchaToken = java.net.URLEncoder.encode(payloadStr, "UTF-8")
 
-        // WebView ရဲ့ JavaScript Fetch API ကို သုံးပြီး Verify နှင့် Device API (၂) ခုလုံးကို တပြိုင်တည်း တောင်းခိုင်းခြင်း Logic
-        val jsVerifyFetch = """
-            (function() {
-                var verifyBody = JSON.stringify({ imei: "$imei" });
-                
-                // 1. IMEI Verify Request
-                fetch('https://ceir.gov.mm/openapi/API/IMEI/Verify?altcha=$altchaToken&imei=$imei', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: verifyBody
-                })
-                .then(res => res.text())
-                .then(vText => {
-                    var b64V = btoa(unescape(encodeURIComponent(vText)));
-                    
-                    // 2. Personal Device Info Request
-                    fetch('https://ceir.gov.mm/openapi/API/Device/personal-device-info?altcha=$altchaToken')
-                    .then(res2 => res2.text())
-                    .then(pText => {
-                        var b64P = btoa(unescape(encodeURIComponent(pText)));
-                        receiveFinalResult(b64V, b64P);
-                    })
-                    .catch(err2 => {
-                        var b64P = btoa(unescape(encodeURIComponent("SKIP")));
-                        receiveFinalResult(b64V, b64P);
-                    });
-                })
-                .catch(err => {
-                    engineError('verify failed');
-                });
-            })();
-        """.trimIndent()
+        val verifyBody = JSONObject().put("imei", imei).toString()
+            .toRequestBody("application/json".toMediaType())
 
-        mainHandler.post { webView.evaluateJavascript(jsVerifyFetch, null) }
+        val verifyReq = Request.Builder()
+            .url("https://ceir.gov.mm/openapi/API/IMEI/Verify?altcha=" + altchaToken + "&imei=" + imei)
+            .post(verifyBody)
+            .header("User-Agent", userAgent)
+            .header("Cookie", cookies)
+            .header("Referer", "https://ceir.gov.mm/")
+            .build()
+
+        val deviceReq = Request.Builder()
+            .url("https://ceir.gov.mm/openapi/API/Device/personal-device-info?altcha=" + altchaToken)
+            .header("User-Agent", userAgent)
+            .header("Cookie", cookies)
+            .header("Referer", "https://ceir.gov.mm/")
+            .build()
+
+        client.newCall(verifyReq).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                callJs("engineError('verify failed')")
+            }
+            override fun onResponse(call: Call, response: Response) {
+                val vBody = response.body?.string() ?: ""
+                val b64V = Base64.encodeToString(vBody.toByteArray(), Base64.NO_WRAP)
+                client.newCall(deviceReq).enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        val b64P = Base64.encodeToString("SKIP".toByteArray(), Base64.NO_WRAP)
+                        callJs("receiveFinalResult('" + b64V + "','" + b64P + "')")
+                    }
+                    override fun onResponse(call: Call, response: Response) {
+                        val pBody = response.body?.string() ?: "SKIP"
+                        val b64P = Base64.encodeToString(pBody.toByteArray(), Base64.NO_WRAP)
+                        callJs("receiveFinalResult('" + b64V + "','" + b64P + "')")
+                    }
+                })
+            }
+        })
     }
 
     private fun callJs(js: String) {
