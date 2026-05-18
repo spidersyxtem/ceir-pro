@@ -5,7 +5,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
-import android.util.Log // 👈 တက်နေတဲ့ Error ကို ဖြေရှင်းရန် Import လိုင်း ထည့်သွင်းထားပါတယ်
+import android.util.Log
 import android.view.MotionEvent
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
@@ -22,8 +22,6 @@ class MainActivity : AppCompatActivity() {
     private val client = OkHttpClient()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-    
-    // UI တစ်ကြိမ်သာ Inject ဖြစ်စေရန် ထိန်းချုပ်မည့် Flag
     private var isUiInjected = false
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
@@ -52,9 +50,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // UI မရှိသေးမှသာ တစ်ကြိမ်တည်း ဆွဲတင်ရန် သေချာစွာ စစ်ဆေးခြင်း
                 if (url != null && url.contains("ceir.gov.mm") && !isUiInjected) {
-                    isUiInjected = true // နောက်ထပ်အကြိမ်များ ဝင်မလာစေရန် ပိတ်လိုက်သည်
+                    isUiInjected = true
                     mainHandler.postDelayed({
                         injectUI()
                     }, 2000)
@@ -65,7 +62,6 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         webView.loadUrl("https://ceir.gov.mm")
 
-        // စာရိုက်ရအဆင်ပြေစေရန် Focus Bug ဖြေရှင်းချက်
         webView.requestFocus()
         webView.requestFocusFromTouch()
         webView.setOnTouchListener { v, event ->
@@ -92,7 +88,6 @@ class MainActivity : AppCompatActivity() {
                 null
             )
         } catch (e: Exception) {
-            Log.e("MainActivity", "Assets data.html load failed: ${e.message}")
             callJs("engineError('Local UI load failed')")
         }
     }
@@ -124,25 +119,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // 🛠️ Cloudflare ကို ကျော်ဖြတ်ရန် WebView AJAX JavaScript သို့ ပြောင်းလဲထားသော မူရင်း Request Challenge Logic
     private fun requestChallenge() {
-        val cookies = CookieManager.getInstance().getCookie("https://ceir.gov.mm") ?: ""
-        val request = Request.Builder()
-            .url("https://ceir.gov.mm/openapi/API/Auth/altcha/altcha")
-            .header("User-Agent", userAgent)
-            .header("Cookie", cookies)
-            .header("Referer", "https://ceir.gov.mm/")
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                callJs("engineError('network error')")
-            }
-            override fun onResponse(call: Call, response: Response) {
-                val body = response.body?.string() ?: ""
-                val b64 = Base64.encodeToString(body.toByteArray(), Base64.NO_WRAP)
-                callJs("receiveChallenge('" + b64 + "')")
-            }
-        })
+        val jsFetch = """
+            fetch('https://ceir.gov.mm/openapi/API/Auth/altcha/altcha')
+                .then(res => res.text())
+                .then(text => {
+                    var b64 = btoa(unescape(encodeURIComponent(text)));
+                    receiveChallenge(b64);
+                })
+                .catch(err => {
+                    engineError('network error');
+                });
+        """.trimIndent()
+        mainHandler.post { webView.evaluateJavascript(jsFetch, null) }
     }
 
     private fun solveAltcha(salt: String, challenge: String, maxNumber: Long) {
