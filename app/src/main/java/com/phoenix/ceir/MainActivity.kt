@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.util.Log // 👈 တက်နေတဲ့ Error ကို ဖြေရှင်းရန် Import လိုင်း ထည့်သွင်းထားပါတယ်
 import android.view.MotionEvent
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
@@ -91,6 +92,7 @@ class MainActivity : AppCompatActivity() {
                 null
             )
         } catch (e: Exception) {
+            Log.e("MainActivity", "Assets data.html load failed: ${e.message}")
             callJs("engineError('Local UI load failed')")
         }
     }
