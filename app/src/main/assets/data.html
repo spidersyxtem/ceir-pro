@@ -41,7 +41,7 @@
         <h2 style="text-align:center; margin-bottom:5px;">Auto Generate VPN</h2>
         <div style="text-align:center; margin-bottom:20px;"><span style="display:inline-block; width:10px; height:10px; background:#10b981; border-radius:50%; margin-right:5px;"></span>Active Status</div>
         
-        <input type="number" id="imeiInput" placeholder="Enter 15-digit IMEI" maxlength="15">
+        <input type="text" inputmode="numeric" id="imeiInput" placeholder="Enter 15-digit IMEI" maxlength="15" oninput="this.value=this.value.replace(/[^0-9]/g,'');">
         <button id="btnCheck" onclick="startCheck()">Check IMEI</button>
         <div id="status">Ready</div>
         <div id="resultHtml"></div>
@@ -50,18 +50,6 @@
     <script>
         var challengeData = null;
         var currentImei = "";
-
-        // Android WebView ဘက်သို့ Direct Bridge ကွန်နက်ရှင် Polyfill
-        if (typeof B4A === 'undefined') {
-            window.B4A = {
-                CallSub: function(subName) {
-                    var args = Array.prototype.slice.call(arguments, 1);
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.B4A) {
-                        // iOS/Custom implementations ကျောထောက်နောက်ခံအတွက်
-                    }
-                }
-            };
-        }
 
         function updateStatus(msg) {
             document.getElementById("status").innerText = msg;
@@ -78,14 +66,9 @@
             document.getElementById("resultHtml").innerHTML = "";
             updateStatus("Requesting Altcha challenge...");
             
-            // Native Bridge သို့ Logic အတိုင်း တိုက်ရိုက်တောင်းဆိုခြင်း
-            if (window.B4A && typeof window.B4A.CallSub === 'function') {
-                window.B4A.CallSub("Bridge_RequestChallenge");
-            } else {
-                // အကယ်၍ addJavascriptInterface က သုံးမရသေးလျှင် URL scheme အဖြစ် fallback သွားရန် logic
-                var payload = { sub: "Bridge_RequestChallenge", args: [] };
-                window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(payload));
-            }
+            // Native Bridge URL scheme သို့ ဒေတာပို့ခြင်း Logic
+            var payload = { sub: "Bridge_RequestChallenge", args: [] };
+            window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(payload));
         }
 
         function b64EncodeUnicode(str) {
@@ -100,16 +83,8 @@
                 challengeData = JSON.parse(dataStr);
                 updateStatus("Solving challenge...");
                 
-                if (window.B4A && typeof window.B4A.CallSub === 'function') {
-                    window.B4A.CallSub("StartAltchaSolver",
-                        challengeData.salt,
-                        challengeData.challenge,
-                        String(challengeData.maxnumber || 1000000)
-                    );
-                } else {
-                    var payload = { sub: "StartAltchaSolver", args: [challengeData.salt, challengeData.challenge, String(challengeData.maxnumber || 1000000)] };
-                    window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(payload));
-                }
+                var payload = { sub: "StartAltchaSolver", args: [challengeData.salt, challengeData.challenge, String(challengeData.maxnumber || 1000000)] };
+                window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(payload));
             } catch(err) {
                 updateStatus("Challenge error: " + err.message);
                 document.getElementById("btnCheck").disabled = false;
@@ -132,12 +107,8 @@
             };
             var b64Payload = btoa(JSON.stringify(payload));
             
-            if (window.B4A && typeof window.B4A.CallSub === 'function') {
-                window.B4A.CallSub("Bridge_VerifyImei", b64Payload, currentImei);
-            } else {
-                var callPayload = { sub: "Bridge_VerifyImei", args: [b64Payload, currentImei] };
-                window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(callPayload));
-            }
+            var callPayload = { sub: "Bridge_VerifyImei", args: [b64Payload, currentImei] };
+            window.location.href = "b4a://call?data=" + b64EncodeUnicode(JSON.stringify(callPayload));
         }
 
         function receiveFinalResult(b64_vData, b64_pData) {
