@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
-import android.util.Log
 import android.view.MotionEvent
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
@@ -22,8 +21,11 @@ class MainActivity : AppCompatActivity() {
     private val client = OkHttpClient()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+    
+    // UI တစ်ကြိမ်သာ Inject ဖြစ်စေရန် ထိန်းချုပ်မည့် Flag
+    private var isUiInjected = false
 
-    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface", "ClickableViewAccessibility")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -37,37 +39,21 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
 
-        // မူရင်း Logic အတိုင်း တိကျစွာ အလုပ်လုပ်မည့် JavaScript Interface
-        webView.addJavascriptInterface(object {
-            @JavascriptInterface
-            fun CallSub(sub: String, vararg args: String) {
-                mainHandler.post {
-                    when (sub) {
-                        "Bridge_RequestChallenge" -> requestChallenge()
-                        "StartAltchaSolver" -> {
-                            if (args.size >= 3) {
-                                val salt = args[0]
-                                val challenge = args[1]
-                                val maxNumber = args[2].toLongOrNull() ?: 1000000L
-                                solveAltcha(salt, challenge, maxNumber)
-                            }
-                        }
-                        "Bridge_VerifyImei" -> {
-                            if (args.size >= 2) {
-                                val b64Payload = args[0]
-                                val imei = args[1]
-                                verifyImei(b64Payload, imei)
-                            }
-                        }
-                    }
-                }
-            }
-        }, "B4A")
-
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+                if (url.startsWith("b4a://call")) {
+                    handleBridge(url)
+                    return true
+                }
+                return false
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                if (url != null && url.contains("ceir.gov.mm")) {
+                // UI မရှိသေးမှသာ တစ်ကြိမ်တည်း ဆွဲတင်ရန် သေချာစွာ စစ်ဆေးခြင်း
+                if (url != null && url.contains("ceir.gov.mm") && !isUiInjected) {
+                    isUiInjected = true // နောက်ထပ်အကြိမ်များ ဝင်မလာစေရန် ပိတ်လိုက်သည်
                     mainHandler.postDelayed({
                         injectUI()
                     }, 2000)
@@ -78,10 +64,9 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         webView.loadUrl("https://ceir.gov.mm")
 
-        // WebView focus နှင့် keyboard ပွင့်စေရန် လုပ်ဆောင်ချက်များ
+        // စာရိုက်ရအဆင်ပြေစေရန် Focus Bug ဖြေရှင်းချက်
         webView.requestFocus()
         webView.requestFocusFromTouch()
-        
         webView.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN,
@@ -106,8 +91,34 @@ class MainActivity : AppCompatActivity() {
                 null
             )
         } catch (e: Exception) {
-            Log.e("MainActivity", "Assets data.html load failed: ${e.message}")
             callJs("engineError('Local UI load failed')")
+        }
+    }
+
+    private fun handleBridge(url: String) {
+        try {
+            val uri = android.net.Uri.parse(url)
+            val dataB64 = uri.getQueryParameter("data") ?: return
+            val json = JSONObject(String(Base64.decode(dataB64, Base64.DEFAULT)))
+            val sub = json.getString("sub")
+            val args = json.optJSONArray("args")
+
+            when (sub) {
+                "Bridge_RequestChallenge" -> requestChallenge()
+                "StartAltchaSolver" -> {
+                    val salt = args?.getString(0) ?: return
+                    val challenge = args.getString(1)
+                    val maxNumber = args.getString(2).toLong()
+                    solveAltcha(salt, challenge, maxNumber)
+                }
+                "Bridge_VerifyImei" -> {
+                    val b64Payload = args?.getString(0) ?: return
+                    val imei = args.getString(1)
+                    verifyImei(b64Payload, imei)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Bridge Payload error: ${e.message}")
         }
     }
 
@@ -127,7 +138,7 @@ class MainActivity : AppCompatActivity() {
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string() ?: ""
                 val b64 = Base64.encodeToString(body.toByteArray(), Base64.NO_WRAP)
-                callJs("receiveChallenge('$b64')")
+                callJs("receiveChallenge('" + b64 + "')")
             }
         })
     }
@@ -145,7 +156,7 @@ class MainActivity : AppCompatActivity() {
                         break 
                     }
                 }
-                callJs("submitVerification($solved)")
+                callJs("submitVerification(" + solved + ")")
             } catch (e: Exception) {
                 callJs("engineError('Altcha solver error')")
             }
@@ -161,7 +172,7 @@ class MainActivity : AppCompatActivity() {
             .toRequestBody("application/json".toMediaType())
 
         val verifyReq = Request.Builder()
-            .url("https://ceir.gov.mm/openapi/API/IMEI/Verify?altcha=$altchaToken&imei=$imei")
+            .url("https://ceir.gov.mm/openapi/API/IMEI/Verify?altcha=" + altchaToken + "&imei=" + imei)
             .post(verifyBody)
             .header("User-Agent", userAgent)
             .header("Cookie", cookies)
@@ -169,7 +180,7 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         val deviceReq = Request.Builder()
-            .url("https://ceir.gov.mm/openapi/API/Device/personal-device-info?altcha=$altchaToken")
+            .url("https://ceir.gov.mm/openapi/API/Device/personal-device-info?altcha=" + altchaToken)
             .header("User-Agent", userAgent)
             .header("Cookie", cookies)
             .header("Referer", "https://ceir.gov.mm/")
@@ -182,16 +193,15 @@ class MainActivity : AppCompatActivity() {
             override fun onResponse(call: Call, response: Response) {
                 val vBody = response.body?.string() ?: ""
                 val b64V = Base64.encodeToString(vBody.toByteArray(), Base64.NO_WRAP)
-
                 client.newCall(deviceReq).enqueue(object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
                         val b64P = Base64.encodeToString("SKIP".toByteArray(), Base64.NO_WRAP)
-                        callJs("receiveFinalResult('$b64V','$b64P')")
+                        callJs("receiveFinalResult('" + b64V + "','" + b64P + "')")
                     }
                     override fun onResponse(call: Call, response: Response) {
                         val pBody = response.body?.string() ?: "SKIP"
                         val b64P = Base64.encodeToString(pBody.toByteArray(), Base64.NO_WRAP)
-                        callJs("receiveFinalResult('$b64V','$b64P')")
+                        callJs("receiveFinalResult('" + b64V + "','" + b64P + "')")
                     }
                 })
             }
